@@ -32,6 +32,7 @@ export const DASHBOARD_TABS: Array<{ id: DashboardTabId; label: string }> = [
 ];
 
 // RSS の追加・削除はこの設定ファイルだけを見ればよいように集約しています。
+// カテゴリ2は経済専用 RSS のみ、カテゴリ3は総合系 RSS のみを持たせています。
 export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
   {
     id: "reuters-economy",
@@ -61,7 +62,7 @@ export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
   {
     id: "japan-economy",
     label: "日本各紙経済",
-    description: "日本の経済系 RSS を横断して表示するカテゴリです。",
+    description: "日本の経済専用 RSS を横断して表示するカテゴリです。",
     filter: {
       excludeKeywords: ECONOMY_EXCLUDE_KEYWORDS,
     },
@@ -88,12 +89,6 @@ export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
         id: "toyokeizai",
         name: "東洋経済",
         url: "https://toyokeizai.net/list/feed/rss",
-        language: "ja",
-      },
-      {
-        id: "mainichi-business",
-        name: "毎日新聞経済",
-        url: "https://mainichi.jp/rss/etc/mainichi-flash.rss",
         language: "ja",
       },
     ],

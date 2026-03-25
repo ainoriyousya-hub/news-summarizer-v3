@@ -6,6 +6,7 @@ import {
   APP_NAME,
   DASHBOARD_TABS,
   NEWS_CATEGORIES,
+  TIME_ZONE,
 } from "@/lib/config";
 import { getJstDateString } from "@/lib/rss";
 import {
@@ -23,6 +24,48 @@ type CollectResponse = {
 type NewsDashboardProps = {
   isAdmin: boolean;
 };
+
+function formatCollectedAt(value: string | undefined): string {
+  if (!value) {
+    return "最終収集: 未収集";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "最終収集: 未収集";
+  }
+
+  return `最終収集: ${new Intl.DateTimeFormat("ja-JP", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date)}`;
+}
+
+function formatPublishedAt(value: string | null): string {
+  if (!value) {
+    return "日時不明";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "日時不明";
+  }
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
 
 function Spinner() {
   return (
@@ -126,7 +169,7 @@ function CategoryPanel({
         >
           <div className="mb-3 flex flex-wrap gap-2 text-xs text-white/70">
             <span className="rounded-full bg-white/10 px-3 py-1">{article.sourceName}</span>
-            <span>{article.publishedAt ?? "日時不明"}</span>
+            <span>{formatPublishedAt(article.publishedAt)}</span>
           </div>
 
           <h3 className="text-lg font-semibold text-white">{article.title}</h3>
@@ -265,6 +308,9 @@ export function NewsDashboard({ isAdmin }: NewsDashboardProps) {
             <p className="text-white/70 text-sm">毎朝更新されるニュースダッシュボード</p>
             <h1 className="mt-2 text-3xl font-bold text-white">{APP_NAME}</h1>
             <p className="mt-3 max-w-3xl text-white/70 leading-7">{APP_DESCRIPTION}</p>
+            <p className="mt-3 text-sm text-white/70">
+              {formatCollectedAt(data?.collectedAt)}
+            </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
