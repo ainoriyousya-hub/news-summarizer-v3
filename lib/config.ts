@@ -95,7 +95,7 @@ export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
       {
         id: "kyodo-economy",
         name: "共同通信",
-        url: "https://www.47news.jp/economics",
+        url: "https://news.yahoo.co.jp/rss/media/yonnana/all.xml",
         language: "ja",
       },
     ],
@@ -138,7 +138,7 @@ export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
       {
         id: "kyodo-general",
         name: "共同通信",
-        url: "https://www.47news.jp/",
+        url: "https://news.yahoo.co.jp/rss/media/yonnana/all.xml",
         language: "ja",
       },
     ],
