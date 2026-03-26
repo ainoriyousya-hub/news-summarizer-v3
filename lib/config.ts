@@ -2,7 +2,7 @@ import { DashboardTabId, NewsCategoryConfig } from "@/lib/types";
 
 export const APP_NAME = "ニュース要約アプリ v3";
 export const APP_DESCRIPTION =
-  "毎朝ニュースを自動収集し、AIが日本語で要約した内容をカテゴリ別に確認できるアプリです。";
+  "毎朝ニュースを自動収集し、AIが日本語で読みやすく整理するニュースダッシュボードです。";
 
 export const AI_MODEL = "claude-haiku-4-5-20251001";
 export const TIME_ZONE = "Asia/Tokyo";
@@ -31,13 +31,14 @@ export const DASHBOARD_TABS: Array<{ id: DashboardTabId; label: string }> = [
   { id: "column", label: "コラム" },
 ];
 
-// RSS の追加・削除はこの設定ファイルだけを見ればよいように集約しています。
-// カテゴリ2は経済専用 RSS のみ、カテゴリ3は総合系 RSS のみを持たせています。
+// ニュースソースの追加や差し替えはこの設定だけを見ればよいように集約する。
+// 共同通信は公開 RSS が見当たらなかったため、47NEWS の公開ページを
+// rss.ts 側の専用パーサーで読み取る構成にしている。
 export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
   {
     id: "reuters-economy",
     label: "ロイター経済",
-    description: "海外の経済ニュースを日本語で読みやすく整理して表示します。",
+    description: "英語の経済ニュースを日本語に翻訳して表示します。",
     sources: [
       {
         id: "cnbc-business",
@@ -62,23 +63,11 @@ export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
   {
     id: "japan-economy",
     label: "日本各紙経済",
-    description: "日本の経済専用 RSS を横断して表示するカテゴリです。",
+    description: "日本語の経済ニュースを中心に表示するカテゴリです。",
     filter: {
       excludeKeywords: ECONOMY_EXCLUDE_KEYWORDS,
     },
     sources: [
-      {
-        id: "asahi-business",
-        name: "朝日新聞経済",
-        url: "https://www.asahi.com/rss/asahi/business.rdf",
-        language: "ja",
-      },
-      {
-        id: "nhk-business",
-        name: "NHK経済",
-        url: "https://www.nhk.or.jp/rss/news/cat4.xml",
-        language: "ja",
-      },
       {
         id: "yahoo-business",
         name: "Yahoo!ニュース経済",
@@ -91,12 +80,30 @@ export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
         url: "https://toyokeizai.net/list/feed/rss",
         language: "ja",
       },
+      {
+        id: "jiji-economy",
+        name: "時事通信",
+        url: "https://www.jiji.com/rss/ranking.rdf",
+        language: "ja",
+      },
+      {
+        id: "mainichi-economy",
+        name: "毎日新聞",
+        url: "https://mainichi.jp/rss/etc/mainichi-flash.rss",
+        language: "ja",
+      },
+      {
+        id: "kyodo-economy",
+        name: "共同通信",
+        url: "https://www.47news.jp/economics",
+        language: "ja",
+      },
     ],
   },
   {
     id: "japan-general",
     label: "日本各紙経済以外",
-    description: "国内の総合ニュースを広く確認できるカテゴリです。",
+    description: "総合ニュースを広く確認できるカテゴリです。",
     sources: [
       {
         id: "asahi-general",
@@ -126,6 +133,12 @@ export const NEWS_CATEGORIES: NewsCategoryConfig[] = [
         id: "jiji-general",
         name: "時事通信",
         url: "https://www.jiji.com/rss/ranking.rdf",
+        language: "ja",
+      },
+      {
+        id: "kyodo-general",
+        name: "共同通信",
+        url: "https://www.47news.jp/",
         language: "ja",
       },
     ],

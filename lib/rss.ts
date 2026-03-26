@@ -22,7 +22,16 @@ type ParserItem = {
   "content:encoded"?: string;
 };
 
+type FortySevenNewsEntry = {
+  id?: string | number;
+  title?: string;
+  url?: string;
+  body?: string;
+  startDate?: string;
+};
+
 const parser = new Parser<Record<string, never>, ParserItem>();
+const FORTY_SEVEN_NEWS_HOST = "https://www.47news.jp";
 
 function stripHtml(input: string): string {
   return input
@@ -66,7 +75,7 @@ function shouldExclude(categoryId: NewsCategoryId, text: string): boolean {
   return keywords.some((keyword) => text.toLowerCase().includes(keyword.toLowerCase()));
 }
 
-async function fetchXml(url: string): Promise<string> {
+async function fetchDocument(url: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), RSS_TIMEOUT_MS);
 
@@ -89,13 +98,139 @@ async function fetchXml(url: string): Promise<string> {
   }
 }
 
-async function fetchFeedArticles(
+function dedupe(articles: RawArticle[]): RawArticle[] {
+  const seen = new Set<string>();
+
+  return articles.filter((article) => {
+    const key = `${article.link}::${article.title}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function toIsoStringFromJstLocal(value: string | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  // 47NEWS の startDate は JST のローカル日時なので、明示的に +09:00 を付ける。
+  const normalized = value.replace(" ", "T");
+  return `${normalized}+09:00`;
+}
+
+function isFortySevenNewsSource(url: string): boolean {
+  return url.startsWith(FORTY_SEVEN_NEWS_HOST);
+}
+
+function extractFortySevenNewsEntries(value: unknown, results: FortySevenNewsEntry[] = []) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => extractFortySevenNewsEntries(item, results));
+    return results;
+  }
+
+  if (!value || typeof value !== "object") {
+    return results;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.title === "string" && typeof record.url === "string") {
+    results.push({
+      id:
+        typeof record.id === "string" || typeof record.id === "number"
+          ? record.id
+          : undefined,
+      title: record.title,
+      url: record.url,
+      body: typeof record.body === "string" ? record.body : undefined,
+      startDate: typeof record.startDate === "string" ? record.startDate : undefined,
+    });
+  }
+
+  Object.values(record).forEach((child) => extractFortySevenNewsEntries(child, results));
+  return results;
+}
+
+async function fetchFortySevenNewsArticles(
   categoryId: NewsCategoryId,
   source: (typeof NEWS_CATEGORIES)[number]["sources"][number],
   targetDate: string,
 ): Promise<RawArticle[]> {
   try {
-    const xml = await fetchXml(source.url);
+    const html = await fetchDocument(source.url);
+    const match = html.match(
+      /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/,
+    );
+
+    if (!match) {
+      throw new Error("47NEWS の構造化データが見つかりませんでした");
+    }
+
+    const nextData = JSON.parse(match[1]) as {
+      props?: {
+        pageProps?: unknown;
+      };
+    };
+
+    const entries = extractFortySevenNewsEntries(nextData.props?.pageProps).slice(
+      0,
+      MAX_ITEMS_PER_SOURCE * 4,
+    );
+
+    const articles = entries
+      .map((entry, index): RawArticle | null => {
+        const title = entry.title?.trim();
+        const relativeUrl = entry.url?.trim();
+
+        if (!title || !relativeUrl) {
+          return null;
+        }
+
+        const link = relativeUrl.startsWith("http")
+          ? relativeUrl
+          : `${FORTY_SEVEN_NEWS_HOST}${relativeUrl}`;
+        const content = stripHtml(entry.body ?? title).slice(0, MAX_ARTICLE_CONTENT_LENGTH);
+        const combined = `${title} ${content}`;
+
+        if (shouldExclude(categoryId, combined)) {
+          return null;
+        }
+
+        return {
+          id: String(entry.id ?? `${source.id}-${index}-${link}`),
+          title,
+          link,
+          publishedAt: toIsoStringFromJstLocal(entry.startDate),
+          content,
+          sourceName: source.name,
+          sourceUrl: source.url,
+          language: source.language,
+        };
+      })
+      .filter((article): article is RawArticle => article !== null)
+      .filter((article) => isTargetDate(article.publishedAt, targetDate));
+
+    return dedupe(articles).slice(0, MAX_ITEMS_PER_SOURCE);
+  } catch (error) {
+    console.error("47NEWS の記事取得に失敗しました。", {
+      sourceName: source.name,
+      sourceUrl: source.url,
+      error,
+    });
+    return [];
+  }
+}
+
+async function fetchRssArticles(
+  categoryId: NewsCategoryId,
+  source: (typeof NEWS_CATEGORIES)[number]["sources"][number],
+  targetDate: string,
+): Promise<RawArticle[]> {
+  try {
+    const xml = await fetchDocument(source.url);
     const feed = await parser.parseString(xml);
 
     return (feed.items ?? [])
@@ -136,7 +271,7 @@ async function fetchFeedArticles(
       .filter((article): article is RawArticle => article !== null)
       .filter((article) => isTargetDate(article.publishedAt, targetDate));
   } catch (error) {
-    console.error("RSSフィードの取得に失敗しました。", {
+    console.error("RSS フィードの取得に失敗しました。", {
       sourceName: source.name,
       sourceUrl: source.url,
       error,
@@ -145,21 +280,19 @@ async function fetchFeedArticles(
   }
 }
 
-function dedupe(articles: RawArticle[]): RawArticle[] {
-  const seen = new Set<string>();
+async function fetchFeedArticles(
+  categoryId: NewsCategoryId,
+  source: (typeof NEWS_CATEGORIES)[number]["sources"][number],
+  targetDate: string,
+): Promise<RawArticle[]> {
+  if (isFortySevenNewsSource(source.url)) {
+    return fetchFortySevenNewsArticles(categoryId, source, targetDate);
+  }
 
-  return articles.filter((article) => {
-    const key = `${article.link}::${article.title}`;
-    if (seen.has(key)) {
-      return false;
-    }
-
-    seen.add(key);
-    return true;
-  });
+  return fetchRssArticles(categoryId, source, targetDate);
 }
 
-// 当日分の RSS 記事をカテゴリ単位で集約して返します。
+// 指定日の記事をカテゴリ別に収集する。各カテゴリの件数上限は config.ts で管理する。
 export async function collectArticlesForDate(targetDate: string) {
   return Promise.all(
     NEWS_CATEGORIES.map(async (category) => {
